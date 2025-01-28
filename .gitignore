@@ -1,0 +1,68 @@
+# 🛑 Игнорируем node_modules (устанавливается через npm install)
+node_modules/
+
+# 🛑 Игнорируем файлы окружения (API-ключи, пароли)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# 🛑 Логи
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 🛑 Кеши и временные файлы
+*.cache
+.cache/
+.tmp/
+dist/
+build/
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+*.orig
+
+# 🛑 Файлы от Knex
+knexfile.ts
+knexfile.js
+
+# 🛑 Бэкапы БД
+*.sqlite
+*.sqlite3
+*.db
+dump.sql
+__db_backups__/
+
+# 🛑 TypeScript output
+*.tsbuildinfo
+out/
+tsconfig.tsbuildinfo
+
+# 🛑 Puppeteer кеш и скачанные браузеры
+puppeteer_cache/
+.puppeteer/
+.chromium/
+
+# 🛑 Git hook-и
+.husky/
+
+# 🛑 Next.js (если вдруг используется)
+.next/
+.vercel/
+
+# 🛑 Telegram Bot Session (если используется telegraf-session)
+data/session.json
+
+# 🛑 ChatGPT API ответные файлы (если сохраняем в JSON)
+chatgpt_responses/
+*.response.json
