@@ -12,45 +12,59 @@ export function setupCreateOrderCommand(bot: Telegraf) {
         const user = await getUserByTgName(tgName);
 
         if (!user) {
-            return ctx.reply("❌ Вы не зарегистрированы в системе.");
+            await ctx.reply("❌ Вы не зарегистрированы в системе.");
+            return;
         }
 
         orderCreationState.set(ctx.from.id, { userId: user.id, retries: 0 });
-        ctx.reply("📝 Опишите деталь, которую хотите заказать:");
+        await ctx.reply("📝 Опишите деталь, которую хотите заказать:");
     });
 
     bot.on("text", async (ctx) => {
-        const state = orderCreationState.get(ctx.from.id);
-        if (!state) return;
-
-        if (!state.description) {
-            state.description = ctx.message.text;
-            ctx.reply("🔍 Определяю артикул детали...");
-
-            const article = await getArticleFromChatGPT(state.description);
-            if (!article) {
-                state.retries++;
-
-                if (state.retries >= 2) {
-                    ctx.reply("❌ Мы не смогли определить артикул. Попробуйте описать деталь по-другому или свяжитесь с менеджером.");
+        try {
+            const state = orderCreationState.get(ctx.from.id);
+            if (!state) return;
+    
+            if (!state.description) {
+                state.description = ctx.message.text;
+                await ctx.reply("🔍 Определяю артикул детали...");
+    
+                const article = await getArticleFromChatGPT(state.description);
+    
+                if (!article) {
+                    state.retries++;
+    
+                    if (state.retries >= 2) {
+                        await ctx.reply("❌ Мы не смогли определить артикул. Попробуйте описать деталь по-другому.");
+                        orderCreationState.delete(ctx.from.id);
+                        return;
+                    }
+    
+                    await ctx.reply("⚠ Недостаточно данных. Уточните описание: марку, модель, год выпуска.");
+                    return;
+                }
+    
+                // Если OpenAI API недоступен (возвращает "❌ OpenAI API недоступен...")
+                if (article.startsWith("❌ OpenAI API недоступен")) {
+                    await ctx.reply("К сожалению, возникла проблема при подключении к серверу OpenAI");
                     orderCreationState.delete(ctx.from.id);
                     return;
                 }
-
-                ctx.reply("⚠ Недостаточно информации для определения артикула. Попробуйте описать деталь подробнее (например, укажите марку, модель, год выпуска).");
-                return;
-            }
-
-            const orderId = await createOrder(article, state.userId);
-            if (!orderId) {
-                ctx.reply("❌ Ошибка при создании заказа.");
+    
+                const orderId = await createOrder(article, state.userId);
+                if (!orderId) {
+                    await ctx.reply("❌ Ошибка при создании заказа.");
+                    orderCreationState.delete(ctx.from.id);
+                    return;
+                }
+    
+                await ctx.reply(`✅ Заказ создан!\n🆔 ID: ${orderId}\n🔧 Артикул: ${article}`);
                 orderCreationState.delete(ctx.from.id);
                 return;
             }
-
-            ctx.reply(`✅ Заказ создан!\n🆔 ID: ${orderId}\n🔧 Артикул: ${article}`);
-            orderCreationState.delete(ctx.from.id);
-            logger.info(`Пользователь ${ctx.from.username} создал заказ с артикулом ${article}`);
+        } catch (error) {
+            console.error("❌ Ошибка в обработчике текстовых сообщений:", error);
+            await ctx.reply("❌ Произошла ошибка. Попробуйте снова.");
         }
-    });
+    });    
 }
