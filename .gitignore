@@ -66,3 +66,5 @@ data/session.json
 # 🛑 ChatGPT API ответные файлы (если сохраняем в JSON)
 chatgpt_responses/
 *.response.json
+
+data/

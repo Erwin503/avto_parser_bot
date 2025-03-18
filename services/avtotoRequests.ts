@@ -32,14 +32,11 @@ export async function searchStart(search_code: string): Promise<any | null> {
   };
 
   const serialized = qs.stringify(requestPayload);
-  logger.info(`SearchStart payload: ${serialized}`);
 
   try {
     const response = await axios.post(AVTOTO_API_URL, serialized, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
-    logger.info(`SearchStart response: ${JSON.stringify(response.data)}`);
-    // Ожидаем, что API вернет process_id (ключ может быть "process_id" или "ProcessSearchId")
     if (response.data && response.data.ProcessSearchId) {
       return response.data;
     } else {
@@ -85,10 +82,9 @@ export async function searchGetParts(processSearchId: string): Promise<any | nul
       const response = await axios.post(AVTOTO_API_URL, serialized, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" }
       });
-      logger.info(`SearchGetParts response: ${JSON.stringify(response.data)}`);
-
       // Если массив Parts не пустой, возвращаем результат
       if (response.data && Array.isArray(response.data.Parts) && response.data.Parts.length > 0) {
+        logger.debug(response.data[1])
         return response.data;
       }
       // Ждем 500 мс и повторяем запрос
