@@ -3,13 +3,35 @@ import * as fs from 'fs';
 import { join } from 'path';
 
 // Обновлённый путь к файлу
-const INVENTORY_FILE_PATH = join(__dirname, '../data/Inventory_Shortened_2.xlsx'); // Путь к вашему Excel файлу
+const INVENTORY_FILE_PATH = join(__dirname, '../data/Inventory_Shortened_2.xlsx');
 
-// Интерфейс для возвращаемых данных
 interface PartInfo {
   Manuf: string;
   Name: string;
   Price: number;
+}
+
+// Функция нормализации имени столбца: удаляет пробелы и приводит к нижнему регистру
+function normalizeKey(key: string): string {
+  return key.trim().toLowerCase();
+}
+
+// Функция для извлечения нужных данных из строки с учетом нормализации
+function extractPartInfo(row: any): PartInfo {
+  const normalizedRow: { [key: string]: any } = {};
+  Object.keys(row).forEach(key => {
+    normalizedRow[normalizeKey(key)] = row[key];
+  });
+
+  const manuf = normalizedRow['бренд'] || '';
+  const name = normalizedRow['item'] || '';
+  let priceValue = normalizedRow['цена розница'];
+  if (priceValue === undefined) {
+    priceValue = normalizedRow['цена розница'];
+  }
+  const price = Number(priceValue) || 0;
+
+  return { Manuf: manuf, Name: name, Price: price };
 }
 
 // Асинхронная функция для поиска деталей по артикулу и получения нужных полей из всех листов Excel
@@ -23,25 +45,23 @@ export async function searchInventoryByPartCode(partCode: string): Promise<PartI
         const workbook = XLSX.read(data, { type: 'buffer' });
         let allData: any[] = [];
 
-        // Перебор всех листов в книге
+        // Обрабатываем все листы книги
         workbook.SheetNames.forEach(sheetName => {
           const sheet = workbook.Sheets[sheetName];
-          // Преобразуем данные листа в массив объектов, используя первую строку как заголовки
           const sheetData = XLSX.utils.sheet_to_json(sheet, { defval: null });
           allData = allData.concat(sheetData);
         });
 
-        // Фильтрация данных по артикулу (Excel-столбец "Артикул")
-        const filtered = allData.filter(row => 
-          row['Артикул'] && row['Артикул'].toString() === partCode.toString()
-        );
-
-        // Преобразование данных в требуемый формат: { Manuf: "БРЕНД", Name: "Item", Price: цена оптовая }
-        const result: PartInfo[] = filtered.map(row => ({
-          Manuf: row['БРЕНД'] || '',
-          Name: row['Item'] || '',
-          Price: Number(row['цена оптовая']) || 0
-        }));
+        // Фильтруем данные по артикулу (нормализуем имена столбцов)
+        const result: PartInfo[] = allData
+          .filter(row => {
+            const normalizedRow: { [key: string]: any } = {};
+            Object.keys(row).forEach(key => {
+              normalizedRow[normalizeKey(key)] = row[key];
+            });
+            return normalizedRow['артикул'] && normalizedRow['артикул'].toString() === partCode.toString();
+          })
+          .map(row => extractPartInfo(row));
 
         resolve(result);
       } catch (error) {
@@ -50,4 +70,3 @@ export async function searchInventoryByPartCode(partCode: string): Promise<PartI
     });
   });
 }
-

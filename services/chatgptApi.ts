@@ -21,7 +21,7 @@ export async function getArticleFromChatGPT(description: string): Promise<string
         const response = await axios.post(
             "https://api.openai.com/v1/chat/completions",
             {
-                model: "gpt-3.5-turbo", // Если у вас есть доступ к GPT-4, можно заменить
+                model: "GPT-4", // Если у вас есть доступ к GPT-4, можно заменить
                 messages: [
                     { 
                         role: "system", 
