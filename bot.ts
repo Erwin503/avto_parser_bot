@@ -5,6 +5,9 @@ import { setupOrdersCommand } from "./commands/orders";
 import { setupOrderHistoryCommand } from "./commands/orderHistory";
 import { setupSetStatusCommand } from "./commands/setStatus";
 import { setupAvtotoPartsCommand } from "./commands/avtotoParts";
+import { setupManufacturerSelection } from "./commands/manufacturerSelection";
+import { setupDetailSelection } from "./commands/detailSelection";
+import { setupOrderCreation } from "./commands/orderCreation";
 
 import logger from "./logger";
 import { gptCommand } from "./commands/gpt";
@@ -18,8 +21,14 @@ setupStartCommand(bot);
 setupOrdersCommand(bot);
 setupOrderHistoryCommand(bot);
 setupSetStatusCommand(bot);
+
 setupAvtotoPartsCommand(bot);
-gptCommand(bot)
+setupManufacturerSelection(bot);
+setupDetailSelection(bot);
+setupOrderCreation(bot);
+
+// setupAvtotoPartsCommand(bot);
+// gptCommand(bot)
 
 
 bot.launch().then(() => logger.info("🤖 Бот запущен!"));
