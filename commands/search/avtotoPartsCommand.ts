@@ -1,8 +1,8 @@
 import { Context, Telegraf } from "telegraf";
-import { searchStart, searchGetParts } from "../services/avtotoRequests";
-import { getUserByTgName } from "../services/userService";
-import { searchInventoryByPartCode } from "../services/excelService";
-import logger from "../logger";
+import { searchStart, searchGetParts } from "../../services/avtotoRequests";
+import { getUserByTgName } from "../../services/userService";
+import { searchInventoryByPartCode } from "../../services/excelService";
+import logger from "../../logger";
 import { searchResultsCache, userCache } from "./cashes";
 
 export const setupAvtotoPartsCommand = (bot: Telegraf) => {
@@ -17,9 +17,13 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
       }
       // Сохраняем данные о пользователе в кэше для последующего использования при создании заказа
       if (ctx.from?.id) userCache.set(ctx.from.id, user);
-      await ctx.reply("❗ Пожалуйста, отправьте артикул, по которому хотите выполнить поиск.");
+      await ctx.reply(
+        "❗ Пожалуйста, отправьте артикул, по которому хотите выполнить поиск."
+      );
     } catch (error: any) {
-      logger.error(`Ошибка при обработке команды /avtoto_parts: ${error.message}`);
+      logger.error(
+        `Ошибка при обработке команды /avtoto_parts: ${error.message}`
+      );
       await ctx.reply("❌ Произошла ошибка при обработке команды.");
     }
   });
@@ -29,7 +33,9 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
     try {
       const searchCode = ctx.message?.text.trim();
       if (!searchCode) {
-        await ctx.reply("❌ Вы не прислали артикул. Пожалуйста, отправьте артикул для поиска.");
+        await ctx.reply(
+          "❌ Вы не прислали артикул. Пожалуйста, отправьте артикул для поиска."
+        );
         return;
       }
 
@@ -42,10 +48,16 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
         return;
       }
       logger.info(`Получен ProcessSearchId: ${startResult.ProcessSearchId}`);
-      await ctx.reply(`🔄 Ожидаю результатов для ProcessSearchId: ${startResult.ProcessSearchId}...`);
+      await ctx.reply(
+        `🔄 Ожидаю результатов для ProcessSearchId: ${startResult.ProcessSearchId}...`
+      );
 
       const partsResult = await searchGetParts(startResult.ProcessSearchId);
-      if (!partsResult || !partsResult.Parts || partsResult.Parts.length === 0) {
+      if (
+        !partsResult ||
+        !partsResult.Parts ||
+        partsResult.Parts.length === 0
+      ) {
         logger.debug("Запчасти Автото не найдены");
       }
 
@@ -54,12 +66,19 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
 
       // Объединяем массивы: сначала данные с вашего склада, затем данные из внешнего сервиса
       const allParts = [
-        ...partsResult.Parts.map((part: { Delivery: string; Manuf: string; Name: string; Price: number; }) => ({
-          Delivery: part.Delivery,
-          Manuf: part.Manuf,
-          Name: part.Name,
-          Price: part.Price,
-        })),
+        ...partsResult.Parts.map(
+          (part: {
+            Delivery: string;
+            Manuf: string;
+            Name: string;
+            Price: number;
+          }) => ({
+            Delivery: part.Delivery,
+            Manuf: part.Manuf,
+            Name: part.Name,
+            Price: part.Price,
+          })
+        ),
         ...inventoryParts.map((part) => ({
           ...part,
           Delivery: "0", // Для товаров со склада время доставки = 0
@@ -75,7 +94,9 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
       const manufacturers = new Set(allParts.map((part: any) => part.Manuf));
       const buttons = Array.from(manufacturers).map((manuf) => {
         const parts = allParts.filter((part: any) => part.Manuf === manuf);
-        const priceRange = `${Math.min(...parts.map((part: any) => part.Price))} - ${Math.max(...parts.map((part: any) => part.Price))}`;
+        const priceRange = `${Math.min(
+          ...parts.map((part: any) => part.Price)
+        )} - ${Math.max(...parts.map((part: any) => part.Price))}`;
         return {
           text: `${manuf} (${priceRange})`,
           callback_data: `manuf:${manuf}`,

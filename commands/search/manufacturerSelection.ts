@@ -1,5 +1,5 @@
 import { Telegraf, Context } from "telegraf";
-import logger from "../logger";
+import logger from "../../logger";
 import { searchResultsCache } from "./cashes";
 
 interface InlineButton {
@@ -19,7 +19,9 @@ export const setupManufacturerSelection = (bot: Telegraf) => {
       }
       const partsResult = searchResultsCache.get(userId);
       if (!partsResult) {
-        await ctx.reply("❌ Результаты поиска не найдены. Попробуйте снова выполнить поиск.");
+        await ctx.reply(
+          "❌ Результаты поиска не найдены. Попробуйте снова выполнить поиск."
+        );
         return;
       }
 
@@ -28,7 +30,9 @@ export const setupManufacturerSelection = (bot: Telegraf) => {
 
       const selectedParts = partsResult
         .filter((part: any) => {
-          const partManufNormalized = part.Manuf ? part.Manuf.trim().toLowerCase() : "";
+          const partManufNormalized = part.Manuf
+            ? part.Manuf.trim().toLowerCase()
+            : "";
           return partManufNormalized === normalizedSelectedManuf;
         })
         .sort((a: any, b: any) => parseInt(a.Delivery) - parseInt(b.Delivery))
@@ -38,16 +42,22 @@ export const setupManufacturerSelection = (bot: Telegraf) => {
         await ctx.reply("❌ Запчасти для выбранного производителя не найдены.");
         return;
       }
-      const detailButtons: InlineButton[] = selectedParts.map((part: any, index: number) => ({
-        text: `${part.Name} - ${part.Price} ₽, ${part.Delivery} д.`,
-        callback_data: `detail:${normalizedSelectedManuf}:${index}`,
-      }));
+      const detailButtons: InlineButton[] = selectedParts.map(
+        (part: any, index: number) => ({
+          text: `${part.Name} - ${part.Price} ₽, ${part.Delivery} д.`,
+          callback_data: `detail:${normalizedSelectedManuf}:${index}`,
+        })
+      );
       await ctx.reply(`Выберите деталь для ${selectedManuf}:`, {
-        reply_markup: { inline_keyboard: detailButtons.map((btn: InlineButton) => [btn]) },
+        reply_markup: {
+          inline_keyboard: detailButtons.map((btn: InlineButton) => [btn]),
+        },
       });
       await ctx.answerCbQuery();
     } catch (error: any) {
-      logger.error(`Ошибка при обработке выбора производителя: ${error.message}`);
+      logger.error(
+        `Ошибка при обработке выбора производителя: ${error.message}`
+      );
       await ctx.reply("❌ Произошла ошибка при обработке вашего выбора.");
     }
   });

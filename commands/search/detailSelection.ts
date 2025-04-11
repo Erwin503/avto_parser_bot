@@ -1,5 +1,5 @@
 import { Telegraf, Context } from "telegraf";
-import logger from "../logger";
+import logger from "../../logger";
 import { searchResultsCache, selectedDetailCache } from "./cashes";
 
 export const setupDetailSelection = (bot: Telegraf) => {
@@ -19,7 +19,9 @@ export const setupDetailSelection = (bot: Telegraf) => {
       }
       const partsResult = searchResultsCache.get(userId);
       if (!partsResult) {
-        await ctx.reply("❌ Результаты поиска не найдены. Попробуйте снова выполнить поиск.");
+        await ctx.reply(
+          "❌ Результаты поиска не найдены. Попробуйте снова выполнить поиск."
+        );
         return;
       }
       // Скрываем кнопки выбора детали
@@ -28,7 +30,9 @@ export const setupDetailSelection = (bot: Telegraf) => {
       const normalizedSelectedManuf = selectedManuf.trim().toLowerCase();
       const selectedParts = partsResult
         .filter((part: any) => {
-          const partManufNormalized = part.Manuf ? part.Manuf.trim().toLowerCase() : "";
+          const partManufNormalized = part.Manuf
+            ? part.Manuf.trim().toLowerCase()
+            : "";
           return partManufNormalized === normalizedSelectedManuf;
         })
         .sort((a: any, b: any) => parseInt(a.Delivery) - parseInt(b.Delivery))
