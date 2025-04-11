@@ -9,6 +9,8 @@ import { searchInventoryByPartCode } from "../services/excelService";
 const searchResultsCache = new Map<number, any>();
 // Глобальный кэш для хранения зарегистрированных пользователей по Telegram ID
 const userCache = new Map<number, any>();
+// Кэш для хранения выбранной детали по ID пользователя
+const selectedDetailCache = new Map<number, any>();
 
 // Интерфейс для кнопок inline keyboard
 interface InlineButton {
@@ -71,14 +73,11 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
         !partsResult.Parts ||
         partsResult.Parts.length === 0
       ) {
-        await ctx.reply("❌ Запчасти не найдены.");
-        return;
+        logger.debug("Запчасти Автото не найдены");
       }
 
-      logger.debug(`partsResult.Parts[1]: ${JSON.stringify(partsResult.Parts[1])}`)
-
       const inventoryParts = await searchInventoryByPartCode(searchCode);
-      logger.debug(`inventoryParts: ${inventoryParts}`)
+      logger.debug(`inventoryParts: ${inventoryParts}`);
 
       // Объединяем массивы: сначала данные с вашего склада, затем данные из внешнего сервиса
       const allParts = [
@@ -90,10 +89,9 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
         })),
         ...inventoryParts.map((part) => ({
           ...part,
-          Delivery: "0", // Для товаров с вашего склада время доставки = 0
+          Delivery: "0", // Для товаров со склада время доставки = 0
         })),
       ];
-      
 
       // Сохраняем результаты поиска в кэше по ID пользователя
       if (ctx.from?.id) {
@@ -101,16 +99,10 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
       }
 
       // Формируем список производителей с диапазоном цен для выбора
-      const manufacturers = new Set(
-        allParts.map((part: any) => part.Manuf)
-      );
+      const manufacturers = new Set(allParts.map((part: any) => part.Manuf));
       const buttons = Array.from(manufacturers).map((manuf) => {
-        const parts = allParts.filter(
-          (part: any) => part.Manuf === manuf
-        );
-        const priceRange = `${Math.min(
-          ...parts.map((part: any) => part.Price)
-        )} - ${Math.max(...parts.map((part: any) => part.Price))}`;
+        const parts = allParts.filter((part: any) => part.Manuf === manuf);
+        const priceRange = `${Math.min(...parts.map((part: any) => part.Price))} - ${Math.max(...parts.map((part: any) => part.Price))}`;
         return {
           text: `${manuf} (${priceRange})`,
           callback_data: `manuf:${manuf}`,
@@ -129,127 +121,78 @@ export const setupAvtotoPartsCommand = (bot: Telegraf) => {
   });
 
   // Обработка выбора производителя — формирование кнопок с вариантами деталей
-bot.action(/manuf:(.+)/, async (ctx) => {
-  try {
-    const selectedManuf = ctx.match[1];
-    // Нормализуем выбранное значение производителя
-    const normalizedSelectedManuf = selectedManuf.trim().toLowerCase();
-    const userId = ctx.from?.id;
-    if (!userId) {
-      await ctx.reply("❌ Не удалось определить пользователя.");
-      return;
-    }
-    const partsResult = searchResultsCache.get(userId);
-    if (!partsResult) {
-      await ctx.reply(
-        "❌ Результаты поиска не найдены. Попробуйте снова выполнить поиск."
-      );
-      return;
-    }
-    // Фильтруем запчасти по выбранному производителю с учетом нормализации,
-    // сортируем по сроку доставки и берём первые 5 вариантов
-    const selectedParts = partsResult.filter((part: any) => {
-      const partManufNormalized = part.Manuf ? part.Manuf.trim().toLowerCase() : "";
-      return partManufNormalized === normalizedSelectedManuf;
-    })
-    .sort((a: any, b: any) => parseInt(a.Delivery) - parseInt(b.Delivery))
-    .slice(0, 5);
-
-    if (selectedParts.length === 0) {
-      await ctx.reply("❌ Запчасти для выбранного производителя не найдены.");
-      return;
-    }
-    // Формируем кнопки для выбора конкретной детали
-    const detailButtons: InlineButton[] = selectedParts.map(
-      (part: any, index: number) => {
-        const buttonText = `${part.Name} - ${part.Price} ₽, ${part.Delivery} д.`;
-        return {
-          text: buttonText,
-          // В callback_data также передаём нормализованное значение производителя
-          callback_data: `detail:${normalizedSelectedManuf}:${index}`,
-        };
+  bot.action(/manuf:(.+)/, async (ctx) => {
+    try {
+      const selectedManuf = ctx.match[1];
+      // Нормализуем выбранное значение производителя
+      const normalizedSelectedManuf = selectedManuf.trim().toLowerCase();
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply("❌ Не удалось определить пользователя.");
+        return;
       }
-    );
-    await ctx.reply(`Выберите деталь для ${selectedManuf}:`, {
-      reply_markup: {
-        inline_keyboard: detailButtons.map((btn: InlineButton) => [btn]),
-      },
-    });
-    await ctx.answerCbQuery();
-  } catch (error: any) {
-    logger.error(
-      `Ошибка при обработке выбора производителя: ${error.message}`
-    );
-    await ctx.reply("❌ Произошла ошибка при обработке вашего выбора.");
-  }
-});
+      const partsResult = searchResultsCache.get(userId);
+      if (!partsResult) {
+        await ctx.reply(
+          "❌ Результаты поиска не найдены. Попробуйте снова выполнить поиск."
+        );
+        return;
+      }
 
-// Обработка выбора детали — вывод информации и кнопки для создания заказа
-bot.action(/detail:(.+):(.+)/, async (ctx) => {
-  try {
-    const selectedManuf = ctx.match[1];
-    const indexStr = ctx.match[2];
-    const index = parseInt(indexStr);
-    if (isNaN(index)) {
-      await ctx.reply("❌ Некорректный выбор детали.");
-      return;
-    }
-    const userId = ctx.from?.id;
-    if (!userId) {
-      await ctx.reply("❌ Не удалось определить пользователя.");
-      return;
-    }
-    const partsResult = searchResultsCache.get(userId);
-    if (!partsResult) {
-      await ctx.reply(
-        "❌ Результаты поиска не найдены. Попробуйте снова выполнить поиск."
+      // Скрываем кнопки выбора производителя, редактируя сообщение, из которого они пришли
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+
+      // Фильтруем запчасти по выбранному производителю с учетом нормализации,
+      // сортируем по сроку доставки и берём первые 5 вариантов
+      const selectedParts = partsResult
+        .filter((part: any) => {
+          const partManufNormalized = part.Manuf
+            ? part.Manuf.trim().toLowerCase()
+            : "";
+          return partManufNormalized === normalizedSelectedManuf;
+        })
+        .sort((a: any, b: any) => parseInt(a.Delivery) - parseInt(b.Delivery))
+        .slice(0, 5);
+
+      if (selectedParts.length === 0) {
+        await ctx.reply(
+          "❌ Запчасти для выбранного производителя не найдены."
+        );
+        return;
+      }
+      // Формируем кнопки для выбора конкретной детали
+      const detailButtons: InlineButton[] = selectedParts.map(
+        (part: any, index: number) => {
+          const buttonText = `${part.Name} - ${part.Price} ₽, ${part.Delivery} д.`;
+          return {
+            text: buttonText,
+            // В callback_data передаём нормализованное значение производителя
+            callback_data: `detail:${normalizedSelectedManuf}:${index}`,
+          };
+        }
       );
-      return;
+      await ctx.reply(`Выберите деталь для ${selectedManuf}:`, {
+        reply_markup: {
+          inline_keyboard: detailButtons.map((btn: InlineButton) => [btn]),
+        },
+      });
+      await ctx.answerCbQuery();
+    } catch (error: any) {
+      logger.error(
+        `Ошибка при обработке выбора производителя: ${error.message}`
+      );
+      await ctx.reply("❌ Произошла ошибка при обработке вашего выбора.");
     }
-    // Нормализуем выбранное значение производителя
-    const normalizedSelectedManuf = selectedManuf.trim().toLowerCase();
-    // Фильтруем детали для выбранного производителя с учетом нормализации
-    const selectedParts = partsResult.filter((part: any) => {
-      const partManufNormalized = part.Manuf ? part.Manuf.trim().toLowerCase() : "";
-      return partManufNormalized === normalizedSelectedManuf;
-    })
-    .sort((a: any, b: any) => parseInt(a.Delivery) - parseInt(b.Delivery))
-    .slice(0, 5);
-    if (selectedParts.length <= index) {
-      await ctx.reply("❌ Деталь не найдена.");
-      return;
-    }
-    const part = selectedParts[index];
-    const messageText = `Вы выбрали деталь:\nНазвание: ${part.Name}\nЦена: ${part.Price} ₽\nСрок доставки: ${part.Delivery} дней\nСклад: ${part.Storage}`;
-    // Выводим информацию о детали и добавляем кнопку для создания заказа
-    await ctx.reply(messageText, {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "✅ Создать заказ",
-              callback_data: `create_order:${normalizedSelectedManuf}:${index}`,
-            },
-          ],
-        ],
-      },
-    });
-    await ctx.answerCbQuery();
-  } catch (error: any) {
-    logger.error(`Ошибка при обработке выбора детали: ${error.message}`);
-    await ctx.reply("❌ Произошла ошибка при обработке вашего выбора.");
-  }
-});
+  });
 
-
-  // Обработка создания заказа при нажатии кнопки "Создать заказ"
-  bot.action(/create_order:(.+):(.+)/, async (ctx) => {
+  // Обработка выбора детали — запись выбранной детали в кэш и вывод информации с кнопкой для создания заказа
+  bot.action(/detail:(.+):(.+)/, async (ctx) => {
     try {
       const selectedManuf = ctx.match[1];
       const indexStr = ctx.match[2];
       const index = parseInt(indexStr);
       if (isNaN(index)) {
-        await ctx.reply("❌ Некорректный выбор детали для создания заказа.");
+        await ctx.reply("❌ Некорректный выбор детали.");
         return;
       }
       const userId = ctx.from?.id;
@@ -264,26 +207,76 @@ bot.action(/detail:(.+):(.+)/, async (ctx) => {
         );
         return;
       }
-      // Фильтруем детали для выбранного производителя
-      const selectedParts = partsResult.filter(
-        (part: any) => part.Manuf === selectedManuf
-      )
+
+      // Скрываем кнопки выбора детали
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+
+      // Нормализуем выбранное значение производителя
+      const normalizedSelectedManuf = selectedManuf.trim().toLowerCase();
+      // Фильтруем детали для выбранного производителя с учетом нормализации
+      const selectedParts = partsResult
+        .filter((part: any) => {
+          const partManufNormalized = part.Manuf ? part.Manuf.trim().toLowerCase() : "";
+          return partManufNormalized === normalizedSelectedManuf;
+        })
         .sort((a: any, b: any) => parseInt(a.Delivery) - parseInt(b.Delivery))
         .slice(0, 5);
       if (selectedParts.length <= index) {
-        await ctx.reply("❌ Деталь не найдена для создания заказа.");
+        await ctx.reply("❌ Деталь не найдена.");
         return;
       }
+      // Выбираем деталь по индексу
       const part = selectedParts[index];
-      const detailArticule = part.Articule || part.Name;
 
+      // Сохраняем выбранную деталь в кэш (перезаписываем предыдущую, если она есть)
+      selectedDetailCache.set(userId, part);
+
+      const messageText = `Вы выбрали деталь:\nНазвание: ${part.Name}\nЦена: ${part.Price} ₽\nСрок доставки: ${part.Delivery} дней\nСклад: ${part.Storage}`;
+      // Выводим информацию о детали и добавляем кнопку для создания заказа
+      await ctx.reply(messageText, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "✅ Создать заказ",
+                callback_data: `create_order:${normalizedSelectedManuf}:${index}`,
+              },
+            ],
+          ],
+        },
+      });
+      await ctx.answerCbQuery();
+    } catch (error: any) {
+      logger.error(`Ошибка при обработке выбора детали: ${error.message}`);
+      await ctx.reply("❌ Произошла ошибка при обработке вашего выбора.");
+    }
+  });
+
+  // Обработка создания заказа при нажатии кнопки "Создать заказ"
+  bot.action(/create_order:(.+):(.+)/, async (ctx) => {
+    try {
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply("❌ Не удалось определить пользователя.");
+        return;
+      }
+      
+      // Извлекаем выбранную ранее деталь из кэша
+      const selectedPart = selectedDetailCache.get(userId);
+      if (!selectedPart) {
+        await ctx.reply("❌ Деталь не выбрана. Пожалуйста, выберите деталь и попробуйте снова.");
+        return;
+      }
+      
+      const detailArticule = selectedPart.Articule || selectedPart.Name;
+      
       // Получаем зарегистрированного пользователя из кэша
       const user = userCache.get(userId);
       if (!user) {
         await ctx.reply("❌ Вы не зарегистрированы в системе.");
         return;
       }
-
+      
       // Создаем заказ через сервис
       const orderId = await createOrder(detailArticule, user.id);
       if (orderId) {

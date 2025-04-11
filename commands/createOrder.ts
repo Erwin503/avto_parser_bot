@@ -29,7 +29,8 @@ export function setupCreateOrderCommand(bot: Telegraf) {
                 state.description = ctx.message.text;
                 await ctx.reply("🔍 Определяю артикул детали...");
     
-                const article = await getArticleFromChatGPT(state.description);
+                // const article = await getArticleFromChatGPT(state.description);
+                const article = state.description
     
                 if (!article) {
                     state.retries++;

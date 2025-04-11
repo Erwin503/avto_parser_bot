@@ -37,7 +37,7 @@ export async function getArticleFromChatGPT(input: ChatGPTInput): Promise<string
           },
           { role: "user", content: userContent }
         ],
-        max_tokens: 20
+        max_tokens: 30
       },
       {
         headers: {
